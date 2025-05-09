@@ -7,7 +7,7 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 # --- Simple password protection ---
 def check_password():
     def password_entered():
-        if st.session_state["password"] == "snooplay123":
+        if st.session_state["password"] == "snoop321":
             st.session_state["password_correct"] = True
             del st.session_state["password"]
         else:
@@ -29,7 +29,7 @@ if not check_password():
 # --- Main Toy Finder App ---
 st.title("🧠 Snooplay Toy Finder (Demo)")
 
-df = pd.read_excel("Demo sheet with tags.xlsx")
+df = pd.read_excel("AI Toy Finder-Sample Sheet1.xlsx")
 
 def combine_tags(row):
     return f"{row['Product Title']} {row['Product Description']} {row['Skills (from GPT)']} {row['Play Type (from GPT)']} {row['Mood (from GPT)']} {row['Learning Outcome (from GPT)']}"
@@ -44,10 +44,11 @@ if query:
     cosine_sim = cosine_similarity(vectorizer[-1], vectorizer[:-1])
     scores = cosine_sim.flatten()
 
-    top_indices = scores.argsort()[::-1][:3]
+    top_indices = scores.argsort()[::-1][:5]
 
     st.subheader("🔍 Top Matching Toys")
     for i in top_indices:
+        st.image(df.iloc[i]['Image URL'], width=250)
         st.markdown(f"**{df.iloc[i]['Product Title']}**")
         st.markdown(f"_{df.iloc[i]['Product Description']}_")
         st.markdown(f"**Skills:** {df.iloc[i]['Skills (from GPT)']}")
