@@ -4,46 +4,55 @@ import pandas as pd
 from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.feature_extraction.text import TfidfVectorizer
 
-# -------------- Password Protection --------------
+# ---------------- Password Protection ----------------
 if "authenticated" not in st.session_state:
-    st.session_state.update({"authenticated": False})
+    st.session_state["authenticated"] = False
 
 if not st.session_state["authenticated"]:
-    password = st.text_input("Enter password:", type="password")
+    password = st.text_input("Enter password to access the Toy Finder:", type="password")
     if password == "snoop321":
-        st.session_state.update({"authenticated": True})
+        st.session_state["authenticated"] = True
         st.rerun()
     elif password:
         st.error("Incorrect password")
         st.stop()
 
-# -------------- Toy Finder App --------------
+# ---------------- Toy Finder App ----------------
 st.title("🧠 Snooplay Toy Finder (Demo)")
+query = st.text_input("Describe what you're looking for:")
 
-df = pd.read_excel("AI Toy Finder-Sample Sheet1.xlsx")
+# Load data
+file_path = "AI Toy Finder-Sample Sheet1.xlsx"
+try:
+    df = pd.read_excel(file_path)
+except FileNotFoundError:
+    st.error("Product data file not found. Please upload the correct Excel file.")
+    st.stop()
 
-user_input = st.text_input("Describe what you're looking for:")
+# Combine tags for similarity
+df["combined_tags"] = df[["Age", "Skills", "Play Type", "Mood", "Learning Outcome"]].fillna("").agg(" ".join, axis=1)
 
-if user_input:
-    corpus = df["Product Description"].astype(str).tolist() + [user_input]
-    vectorizer = TfidfVectorizer(stop_words="english").fit(corpus)
-    embeddings = vectorizer.transform(corpus)
+# TF-IDF
+vectorizer = TfidfVectorizer()
+tfidf_matrix = vectorizer.fit_transform(df["combined_tags"])
 
-    query_vec = embeddings[-1]
-    toy_vecs = embeddings[:-1]
+# Process query
+if query:
+    query_vec = vectorizer.transform([query])
+    similarities = cosine_similarity(query_vec, tfidf_matrix).flatten()
+    df["similarity"] = similarities
 
-    similarities = cosine_similarity(query_vec, toy_vecs).flatten()
-    df["Score"] = similarities
-    results = df.sort_values(by="Score", ascending=False).head(5)
+    # Sort and filter
+    top_matches = df.sort_values(by="similarity", ascending=False).head(3)
 
-    st.subheader("🔍 Top Matching Toys")
-    for _, row in results.iterrows():
+    st.markdown("🔍 **Top Matching Toys**")
+    for _, row in top_matches.iterrows():
         st.markdown(f"### {row['Product Title']}")
-        if pd.notna(row.get("Image URL")):
-            st.image(row["Image URL"], width=200)
-        st.markdown(f"_{row['Product Description']}_")
-        st.markdown(f"**Skills:** {row['Skills']}")
-        st.markdown(f"**Play Type:** {row['Play Type']}")
-        st.markdown(f"**Mood:** {row['Mood']}")
-        st.markdown(f"**Learning Outcome:** {row['Learning']}")
+        st.markdown(f"*{row['Product Description']}*")
+        st.markdown(f"**Skills:** {row.get('Skills', 'N/A')}")
+        st.markdown(f"**Play Type:** {row.get('Play Type', 'N/A')}")
+        st.markdown(f"**Mood:** {row.get('Mood', 'N/A')}")
+        st.markdown(f"**Learning Outcome:** {row.get('Learning Outcome', 'N/A')}")
+        if pd.notna(row.get("Image URL", None)):
+            st.image(row["Image URL"], width=300)
         st.markdown("---")
