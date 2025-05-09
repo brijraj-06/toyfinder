@@ -9,7 +9,7 @@ if "authenticated" not in st.session_state:
     st.session_state["authenticated"] = False
 
 if not st.session_state["authenticated"]:
-    password = st.text_input("Enter password to access the Toy Finder:", type="password")
+    password = st.text_input("Enter password:", type="password")
     if password == "snoop321":
         st.session_state["authenticated"] = True
         st.rerun()
@@ -17,42 +17,43 @@ if not st.session_state["authenticated"]:
         st.error("Incorrect password")
         st.stop()
 
-# ---------------- Toy Finder App ----------------
+# ---------------- Toy Finder Logic ----------------
 st.title("🧠 Snooplay Toy Finder (Demo)")
+
 query = st.text_input("Describe what you're looking for:")
 
-# Load data
-file_path = "AI Toy Finder-Sample Sheet1.xlsx"
-try:
-    df = pd.read_excel(file_path)
-except FileNotFoundError:
-    st.error("Product data file not found. Please upload the correct Excel file.")
-    st.stop()
+# Load the dataset
+df = pd.read_excel("AI Toy Finder-Sample Sheet1.xlsx")
 
-# Combine tags for similarity
-df["combined_tags"] = df[["Age", "Skills", "Play Type", "Mood", "Learning Outcome"]].fillna("").agg(" ".join, axis=1)
+# Combine relevant tags into one text column
+df["combined_tags"] = df[[
+    "Age (from GPT)",
+    "Skills (from GPT)",
+    "Play Type (from GPT)",
+    "Mood (from GPT)",
+    "Learning Outcome (from GPT)"
+]].fillna("").agg(" ".join, axis=1)
 
-# TF-IDF
-vectorizer = TfidfVectorizer()
-tfidf_matrix = vectorizer.fit_transform(df["combined_tags"])
-
-# Process query
+# Process the query and match top results
 if query:
-    query_vec = vectorizer.transform([query])
-    similarities = cosine_similarity(query_vec, tfidf_matrix).flatten()
+    all_text = df["combined_tags"].tolist() + [query]
+    vectorizer = TfidfVectorizer()
+    vectors = vectorizer.fit_transform(all_text)
+    similarities = cosine_similarity(vectors[-1], vectors[:-1]).flatten()
+
     df["similarity"] = similarities
+    filtered = df[df["similarity"] > 0.3].sort_values("similarity", ascending=False).head(3)
 
-    # Sort and filter
-    top_matches = df.sort_values(by="similarity", ascending=False).head(3)
-
-    st.markdown("🔍 **Top Matching Toys**")
-    for _, row in top_matches.iterrows():
-        st.markdown(f"### {row['Product Title']}")
-        st.markdown(f"*{row['Product Description']}*")
-        st.markdown(f"**Skills:** {row.get('Skills', 'N/A')}")
-        st.markdown(f"**Play Type:** {row.get('Play Type', 'N/A')}")
-        st.markdown(f"**Mood:** {row.get('Mood', 'N/A')}")
-        st.markdown(f"**Learning Outcome:** {row.get('Learning Outcome', 'N/A')}")
-        if pd.notna(row.get("Image URL", None)):
-            st.image(row["Image URL"], width=300)
-        st.markdown("---")
+    if not filtered.empty:
+        st.markdown("🔍 **Top Matching Toys**")
+        for _, row in filtered.iterrows():
+            st.markdown(f"### {row['Product Title']}")
+            st.markdown(f"_{row['Product Description']}_")
+            st.markdown(f"![Image]({row['Image URL']})")
+            st.markdown(f"**Skills:** {row['Skills (from GPT)']}")
+            st.markdown(f"**Play Type:** {row['Play Type (from GPT)']}")
+            st.markdown(f"**Mood:** {row['Mood (from GPT)']}")
+            st.markdown(f"**Learning Outcome:** {row['Learning Outcome (from GPT)']}")
+            st.markdown("---")
+    else:
+        st.warning("No relevant results found. Try a different query.")
