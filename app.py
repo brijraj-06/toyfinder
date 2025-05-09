@@ -1,59 +1,57 @@
-
 import streamlit as st
 import pandas as pd
 from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.feature_extraction.text import TfidfVectorizer
 
-# ---------------- Password Protection ----------------
+# --------------- Password Protection ---------------
 if "authenticated" not in st.session_state:
     st.session_state["authenticated"] = False
 
 if not st.session_state["authenticated"]:
-    password = st.text_input("Enter password:", type="password")
+    password = st.text_input("Enter password to access the Toy Finder:", type="password")
     if password == "snoop321":
         st.session_state["authenticated"] = True
         st.rerun()
     elif password:
         st.error("Incorrect password")
         st.stop()
+    else:
+        st.stop()
 
-# ---------------- Toy Finder Logic ----------------
+# ---------------- Toy Finder UI ----------------
 st.title("🧠 Snooplay Toy Finder (Demo)")
-
 query = st.text_input("Describe what you're looking for:")
 
-# Load the dataset
+# Load Excel data
 df = pd.read_excel("AI Toy Finder-Sample Sheet1.xlsx")
 
-# Combine relevant tags into one text column
-df["combined_tags"] = df[[
-    "Age (from GPT)",
-    "Skills (from GPT)",
-    "Play Type (from GPT)",
-    "Mood (from GPT)",
-    "Learning Outcome (from GPT)"
-]].fillna("").agg(" ".join, axis=1)
+# Combine title, description, and AI tags into one searchable field
+df["combined_tags"] = df[["Product Title", "Product Description", "Age", "Skills", "Play Type", "Mood", "Learning"]].fillna("").agg(" ".join, axis=1)
 
-# Process the query and match top results
+# Run only if a query is entered
 if query:
-    all_text = df["combined_tags"].tolist() + [query]
-    vectorizer = TfidfVectorizer()
-    vectors = vectorizer.fit_transform(all_text)
+    vectorizer = TfidfVectorizer(stop_words='english')
+    vectors = vectorizer.fit_transform(df["combined_tags"].tolist() + [query])
     similarities = cosine_similarity(vectors[-1], vectors[:-1]).flatten()
 
-    df["similarity"] = similarities
-    filtered = df[df["similarity"] > 0.3].sort_values("similarity", ascending=False).head(3)
+    # Get top 3 matches
+    top_indices = similarities.argsort()[::-1][:3]
+    top_scores = similarities[top_indices]
 
-    if not filtered.empty:
-        st.markdown("🔍 **Top Matching Toys**")
-        for _, row in filtered.iterrows():
-            st.markdown(f"### {row['Product Title']}")
-            st.markdown(f"_{row['Product Description']}_")
-            st.markdown(f"![Image]({row['Image URL']})")
-            st.markdown(f"**Skills:** {row['Skills (from GPT)']}")
-            st.markdown(f"**Play Type:** {row['Play Type (from GPT)']}")
-            st.markdown(f"**Mood:** {row['Mood (from GPT)']}")
-            st.markdown(f"**Learning Outcome:** {row['Learning Outcome (from GPT)']}")
-            st.markdown("---")
-    else:
+    if top_scores.max() < 0.2:
         st.warning("No relevant results found. Try a different query.")
+    else:
+        st.subheader("🔍 Top Matching Toys")
+        for idx in top_indices:
+            if top_scores[idx] < 0.2:
+                continue
+            row = df.iloc[idx]
+            st.markdown(f"### {row['Product Title']}")
+            st.image(row["Image URL"], use_column_width=True)
+            st.markdown(f"*{row['Product Description']}*")
+            st.markdown(f"**Age:** {row['Age']}")
+            st.markdown(f"**Skills:** {row['Skills']}")
+            st.markdown(f"**Play Type:** {row['Play Type']}")
+            st.markdown(f"**Mood:** {row['Mood']}")
+            st.markdown(f"**Learning Outcome:** {row['Learning']}")
+            st.markdown("---")
