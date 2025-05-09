@@ -16,34 +16,35 @@ if not st.session_state["authenticated"]:
     elif password:
         st.error("Incorrect password")
         st.stop()
-    else:
-        st.stop()
 
-# Load Excel file
-df = pd.read_excel("AI Toy Finder-Sample Sheet1.xlsx")
-
-# Combine relevant columns into a single text field for similarity search
-df["combined_tags"] = df[["Product Title", "Product Description", "Age", "Skills", "Play Type", "Mood", "Learning Outcome"]].fillna("").agg(" ".join, axis=1)
-
-# User input
 st.title("🧠 Snooplay Toy Finder (Demo)")
 query = st.text_input("Describe what you're looking for:")
 
+# Load and clean data
+df = pd.read_excel("AI Toy Finder-Sample Sheet1.xlsx")
+df.columns = df.columns.str.strip()
+
+required_cols = ["Product Title", "Product Description", "Age", "Skills", "Play Type", "Mood", "Learning Outcome"]
+if not all(col in df.columns for col in required_cols):
+    st.error("The uploaded sheet is missing required columns.")
+    st.stop()
+
+df["combined_tags"] = df[required_cols].fillna("").agg(" ".join, axis=1)
+
+# Perform search
 if query:
-    # Compute similarity
     vectorizer = TfidfVectorizer()
-    vectors = vectorizer.fit_transform([query] + df["combined_tags"].tolist())
-    cosine_sim = cosine_similarity(vectors[0:1], vectors[1:]).flatten()
+    tfidf_matrix = vectorizer.fit_transform(df["combined_tags"])
+    query_vec = vectorizer.transform([query])
+    similarities = cosine_similarity(query_vec, tfidf_matrix).flatten()
+    
+    df["similarity"] = similarities
+    results = df[df["similarity"] > 0.3].sort_values(by="similarity", ascending=False).head(3)
 
-    # Threshold and top results
-    df["similarity"] = cosine_sim
-    top_matches = df[df["similarity"] > 0.1].sort_values(by="similarity", ascending=False).head(3)
-
-    if top_matches.empty:
+    if results.empty:
         st.warning("No relevant results found. Try a different query.")
     else:
-        st.subheader("🔍 Top Matching Toys")
-        for _, row in top_matches.iterrows():
+        for _, row in results.iterrows():
             st.markdown(f"### {row['Product Title']}")
             st.markdown(f"*{row['Product Description']}*")
             st.markdown(f"**Age:** {row['Age']}")
