@@ -4,12 +4,12 @@ import pandas as pd
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
-# ------------------ Password Protection ------------------
+# ---------------- Password Protection ----------------
 if "authenticated" not in st.session_state:
     st.session_state["authenticated"] = False
 
 if not st.session_state["authenticated"]:
-    password = st.text_input("Enter password:", type="password")
+    password = st.text_input("Enter password to access the Toy Finder:", type="password")
     if password == "snoop321":
         st.session_state["authenticated"] = True
         st.rerun()
@@ -17,43 +17,49 @@ if not st.session_state["authenticated"]:
         st.error("Incorrect password")
         st.stop()
 
-# ------------------ App Title ------------------
-st.markdown("<h1 style='font-size: 42px;'>🧠 Snooplay Toy Finder (Demo)</h1>", unsafe_allow_html=True)
+# ---------------- App Title ----------------
+st.markdown("## 🧠 Snooplay Toy Finder (Demo)")
 st.write("Describe what you're looking for:")
 
-# ------------------ Load Data ------------------
+# ---------------- Load Data ----------------
 df = pd.read_excel("AI Toy Finder-Sample Sheet1.xlsx")
 
-# Ensure relevant columns exist
-df = df.dropna(subset=["Product Title", "Product Description"])
+# Combine only Product Title and Description for semantic search
+df["combined_text"] = df["Product Title"].astype(str) + " " + df["Product Description"].astype(str)
 
-# Combine just title and description
-df["combined_text"] = df["Product Title"].astype(str).str.lower() + " " + df["Product Description"].astype(str).str.lower()
-
-# ------------------ User Input ------------------
-query = st.text_input("", placeholder="e.g., toy for a 5 year old who loves to build")
+# ---------------- Input Query ----------------
+query = st.text_input("")
 
 if query:
-    query = query.lower()
+    # TF-IDF Vectorization
+    vectorizer = TfidfVectorizer(stop_words='english')
+    vectors = vectorizer.fit_transform(df["combined_text"].tolist() + [query])
+    query_vec = vectors[-1]
+    product_vecs = vectors[:-1]
 
-    vectorizer = TfidfVectorizer()
-    tfidf_matrix = vectorizer.fit_transform(df["combined_text"].tolist() + [query])
-    
-    similarities = cosine_similarity(tfidf_matrix[-1], tfidf_matrix[:-1]).flatten()
-    
+    # Compute Similarities
+    similarities = cosine_similarity(query_vec, product_vecs).flatten()
     df["similarity"] = similarities
-    filtered_df = df[df["similarity"] >= 0.3]
 
-    if filtered_df.empty:
-        filtered_df = df[df["similarity"] >= 0.1]
+    # First, try with threshold 0.3
+    top_matches = df[df["similarity"] > 0.3].sort_values(by="similarity", ascending=False).head(3)
 
-    if filtered_df.empty:
-        st.warning("No relevant results found. Try a different query.")
-    else:
-        top_matches = filtered_df.sort_values(by="similarity", ascending=False).head(3)
-        st.subheader("🔍 Top Matching Toys")
+    # If no results, lower the threshold to 0.1
+    if top_matches.empty:
+        top_matches = df[df["similarity"] > 0.1].sort_values(by="similarity", ascending=False).head(3)
+
+    # Show results or fallback message
+    if not top_matches.empty:
+        st.markdown("### 🔍 Top Matching Toys")
         for _, row in top_matches.iterrows():
-            st.markdown(f"### {row['Product Title']}")
+            st.subheader(row["Product Title"])
             st.markdown(f"*{row['Product Description']}*")
-            if "Image Link" in row and pd.notna(row["Image Link"]):
-                st.image(row["Image Link"], use_column_width=True)
+            st.markdown(f"**Skills:** {row['Skills']}")
+            st.markdown(f"**Play Type:** {row['Play Type']}")
+            st.markdown(f"**Mood:** {row['Mood']}")
+            st.markdown(f"**Learning Outcome:** {row['Learning']}")
+            if pd.notna(row.get("Image URL", None)):
+                st.image(row["Image URL"], width=300)
+            st.markdown("---")
+    else:
+        st.warning("No relevant results found. Try a different query.")
