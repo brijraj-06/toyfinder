@@ -9,7 +9,7 @@ if "authenticated" not in st.session_state:
     st.session_state["authenticated"] = False
 
 if not st.session_state["authenticated"]:
-    password = st.text_input("Enter password:", type="password")
+    password = st.text_input("Enter password to access the Toy Finder:", type="password")
     if password == "snoop321":
         st.session_state["authenticated"] = True
         st.rerun()
@@ -29,7 +29,7 @@ df["combined_text"] = df["Product Title"].astype(str) + " " + df["Product Descri
 # Input from user
 query = st.text_input("")
 
-# Character-level TF-IDF vectorizer (4-6 character n-grams)
+# Character-level TF-IDF vectorizer (4-6 char n-grams)
 if query:
     vectorizer = TfidfVectorizer(analyzer='char_wb', ngram_range=(4, 6))
     tfidf_matrix = vectorizer.fit_transform(df["combined_text"].tolist() + [query])
@@ -44,9 +44,14 @@ if query:
         st.warning("No relevant results found. Try a different query.")
     else:
         st.subheader("🔍 Top Matching Toys")
+        if top_matches["similarity"].max() < 0.2:
+            st.info("These results may not be exact matches, but are the closest we could find:")
+
         for _, row in top_matches.iterrows():
             st.markdown(f"### {row['Product Title']}")
-            st.markdown(f"*{row['Product Description']}*")
+            st.markdown(f"_Similarity Score: {row['similarity']*100:.1f}%_")
+            short_desc = row["Product Description"][:200] + ("..." if len(row["Product Description"]) > 200 else "")
+            st.markdown(f"*{short_desc}*")
             if "Image URL" in row and isinstance(row["Image URL"], str) and row["Image URL"].startswith("http"):
                 st.image(row["Image URL"], width=300)
             st.markdown("---")
