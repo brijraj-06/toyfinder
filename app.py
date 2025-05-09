@@ -6,38 +6,41 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 
 # -------------- Password Protection --------------
 if "authenticated" not in st.session_state:
-    st.session_state["authenticated"] = False
+    st.session_state.update({"authenticated": False})
 
 if not st.session_state["authenticated"]:
-    password = st.text_input("Enter password to access the Toy Finder:", type="password")
+    password = st.text_input("Enter password:", type="password")
     if password == "snoop321":
-        st.session_state["authenticated"] = True
+        st.session_state.update({"authenticated": True})
         st.rerun()
     elif password:
         st.error("Incorrect password")
         st.stop()
 
-# -------------- Toy Finder Logic --------------
+# -------------- Toy Finder App --------------
 st.title("🧠 Snooplay Toy Finder (Demo)")
 
-query = st.text_input("Describe what you're looking for:")
+df = pd.read_excel("AI Toy Finder-Sample Sheet1.xlsx")
 
-if query:
-    df = pd.read_excel("AI Toy Finder-Sample Sheet1.xlsx")
-    df["combined_text"] = df["Product Title"].fillna("") + " " + df["Product Description"].fillna("") + " " + df["Skills"].fillna("") + " " + df["Play Type"].fillna("") + " " + df["Mood"].fillna("") + " " + df["Learning"].fillna("")
+user_input = st.text_input("Describe what you're looking for:")
 
-    vectorizer = TfidfVectorizer(stop_words="english")
-    tfidf_matrix = vectorizer.fit_transform(df["combined_text"])
-    query_vec = vectorizer.transform([query])
-    similarity_scores = cosine_similarity(query_vec, tfidf_matrix).flatten()
+if user_input:
+    corpus = df["Product Description"].astype(str).tolist() + [user_input]
+    vectorizer = TfidfVectorizer(stop_words="english").fit(corpus)
+    embeddings = vectorizer.transform(corpus)
 
-    df["score"] = similarity_scores
-    results = df.sort_values(by="score", ascending=False).head(5)
+    query_vec = embeddings[-1]
+    toy_vecs = embeddings[:-1]
+
+    similarities = cosine_similarity(query_vec, toy_vecs).flatten()
+    df["Score"] = similarities
+    results = df.sort_values(by="Score", ascending=False).head(5)
 
     st.subheader("🔍 Top Matching Toys")
     for _, row in results.iterrows():
         st.markdown(f"### {row['Product Title']}")
-        st.image(row["Image URL"], width=200)
+        if pd.notna(row.get("Image URL")):
+            st.image(row["Image URL"], width=200)
         st.markdown(f"_{row['Product Description']}_")
         st.markdown(f"**Skills:** {row['Skills']}")
         st.markdown(f"**Play Type:** {row['Play Type']}")
